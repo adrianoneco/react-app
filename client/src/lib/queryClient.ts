@@ -11,15 +11,27 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
-): Promise<Response> {
+): Promise<any> {
+  const token = localStorage.getItem("token");
+  const isFormData = data instanceof FormData;
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(!isFormData && data ? { "Content-Type": "application/json" } : {}),
+    },
+    body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
     credentials: "include",
   });
 
   await throwIfResNotOk(res);
+  
+  const contentType = res.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return await res.json();
+  }
+  
   return res;
 }
 
@@ -29,7 +41,12 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const token = localStorage.getItem("token");
+    
     const res = await fetch(queryKey.join("/") as string, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
       credentials: "include",
     });
 
